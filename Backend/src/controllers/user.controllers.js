@@ -1,31 +1,62 @@
+import mongoose from "mongoose";
 import USER from "../models/user.model.js";
 
 const createAndUpdateUser = async (req, res) => {
-  const { userName, email, password } = req.body;
-  let value = req.body;
-  console.log(value);
-  for (const key in value) {
-    if (!value[key]) {
-      res.status(400).json({ status: false, msg: "All feilds are required" });
-      return;
-    }
-  }
-  // const id = req.params;
-  // return;
   try {
-    // create case
+    const { id } = req.params;
+    const { userName, email, password } = req.body;
+    //  Update User
+    if (id) {
+      const updatedData = {};
+      if (userName) updatedData.userName = userName;
+      if (email) updatedData.email = email;
+      if (password) updatedData.password = password;
+
+      const update = await USER.findByIdAndUpdate(id, updatedData, {
+        new: true,
+        runValidators: true,
+      });
+
+      if (!update) {
+        return res.status(404).json({
+          status: false,
+          msg: "User not found",
+        });
+      }
+
+      return res.status(200).json({
+        status: true,
+        msg: "User Updated Successfully",
+        data: {
+          id: update.id,
+          userName: update.userName,
+          email: update.email,
+        },
+      });
+    }
+    // Create User
+    if (!userName || !email || !password) {
+      return res.status(400).json({
+        status: false,
+        msg: "All fields are required",
+      });
+    }
+
     const exitingEmail = await USER.findOne({ email });
     if (exitingEmail) {
-      res.status(400).json({ status: false, msg: "Email is already used" });
+      return res.status(400).json({
+        status: false,
+        msg: "Email is already used",
+      });
     }
-    const payload = {
+
+    const create = await USER.create({
       userName,
       email,
       password,
-    };
-    console.log(payload, "payload");
-    const create = await USER.create(payload);
-    res.status(201).json({
+    });
+
+    return res.status(201).json({
       status: true,
       msg: "User Created Successfully",
       data: {
@@ -35,8 +66,57 @@ const createAndUpdateUser = async (req, res) => {
       },
     });
   } catch (error) {
-    console.log("Internal Server Error");
+    console.error("Error:", error);
+    return res.status(500).json({
+      status: false,
+      msg: "Internal Server Error",
+    });
   }
 };
 
-export { createAndUpdateUser };
+const getAllUser = async (req, res) => {
+  const page = req.query.page || 1;
+  const limit = req.query.limit || 10;
+
+  const skip = (page - 1) * limit;
+
+  try {
+    const getAll = await USER.find({}).skip(skip).limit(limit);
+    const totalDocs = await USER.countDocuments({});
+    const totalPages = Math.ceil(totalDocs / limit);
+    return res.status(200).json({
+      status: true,
+      msg: "User Fetch Successfully",
+      data: { getAll, totalDocs, totalPages },
+    });
+  } catch (error) {
+    console.log("Error", error);
+    return res
+      .status(500)
+      .json({ status: false, msg: "Internal Server Error" });
+  }
+};
+
+const deleteUser = async (req, res) => {
+  const { id } = req.query;
+  try {
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ status: false, msg: "Invalid User Id" });
+    }
+    const user = await USER.findByIdAndDelete(id);
+    if (!user) {
+      return res.status(400).json({ status: false, msg: "User Not Found" });
+    }
+    return res
+      .status(200)
+      .json({ status: true, msg: "User Deleted Successfully" });
+  } catch (error) {
+    console.error("Error:", error);
+    return res.status(500).json({
+      status: false,
+      msg: "Internal Server Error",
+    });
+  }
+};
+
+export { createAndUpdateUser, deleteUser, getAllUser };
